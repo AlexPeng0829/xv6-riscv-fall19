@@ -32,7 +32,7 @@ OBJS = \
 
 # riscv64-unknown-elf- or riscv64-linux-gnu-
 # perhaps in /opt/riscv/bin
-#TOOLPREFIX = 
+TOOLPREFIX = riscv64-unknown-elf-
 
 # Try to infer the correct TOOLPREFIX if not set
 ifndef TOOLPREFIX
@@ -140,13 +140,18 @@ UPROGS=\
 	$U/_bcachetest\
 	$U/_mounttest\
 	$U/_crashtest\
+	$U/_sleep\
+	$U/_pingpong\
+	$U/_primes\
+	$U/_find\
+	$U/_xargs\
 
 fs.img: mkfs/mkfs README user/xargstest.sh $(UPROGS)
 	mkfs/mkfs fs.img README user/xargstest.sh $(UPROGS)
 
 -include kernel/*.d user/*.d
 
-clean: 
+clean:
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
 	*/*.o */*.d */*.asm */*.sym \
 	$U/initcode $U/initcode.out $K/kernel fs.img \
