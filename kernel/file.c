@@ -66,6 +66,8 @@ fileclose(struct file *f)
     return;
   }
 
+  release(&ftable.lock);
+
   if(f->type == FD_PIPE){
     pipeclose(f->pipe, f->writable);
   } else if(f->type == FD_INODE || f->type == FD_DEVICE){
@@ -74,7 +76,6 @@ fileclose(struct file *f)
     end_op(f->ip->dev);
   }
   bd_free((void *) f);
-  release(&ftable.lock);
 
 }
 
@@ -85,7 +86,7 @@ filestat(struct file *f, uint64 addr)
 {
   struct proc *p = myproc();
   struct stat st;
-  
+
   if(f->type == FD_INODE || f->type == FD_DEVICE){
     ilock(f->ip);
     stati(f->ip, &st);
