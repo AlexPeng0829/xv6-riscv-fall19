@@ -34,7 +34,6 @@ exec(char *path, char **argv)
     goto bad;
   if(elf.magic != ELF_MAGIC)
     goto bad;
-
   if((pagetable = proc_pagetable(p)) == 0)
     goto bad;
 
@@ -104,7 +103,7 @@ exec(char *path, char **argv)
     if(*s == '/')
       last = s+1;
   safestrcpy(p->name, last, sizeof(p->name));
-    
+  vmprint(pagetable);
   // Commit to the user image.
   oldpagetable = p->pagetable;
   p->pagetable = pagetable;

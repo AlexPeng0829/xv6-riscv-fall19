@@ -219,6 +219,7 @@ userinit(void)
   p->state = RUNNABLE;
 
   release(&p->lock);
+  // vmprint(p->pagetable);
 }
 
 // Grow or shrink user memory by n bytes.
@@ -372,7 +373,6 @@ exit(int status)
 
   p->xstate = status;
   p->state = ZOMBIE;
-
   release(&original_parent->lock);
 
   // Jump into the scheduler, never to return.

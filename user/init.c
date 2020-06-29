@@ -4,6 +4,9 @@
 #include "kernel/stat.h"
 #include "user/user.h"
 #include "kernel/fcntl.h"
+// #include "kernel/defs.h"
+// #include "kernel/spinlock.h"
+// #include "kernel/proc.h"
 
 char *argv[] = { "sh", 0 };
 
@@ -18,7 +21,7 @@ main(void)
   }
   dup(0);  // stdout
   dup(0);  // stderr
-
+  // vmprint(myproc()->pagetable);
   for(;;){
     printf("init: starting sh\n");
     pid = fork();

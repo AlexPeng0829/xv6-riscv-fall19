@@ -795,7 +795,6 @@ createdelete(char *s)
       printf("fork failed\n", s);
       exit(1);
     }
-
     if(pid == 0){
       name[0] = 'p' + pi;
       name[2] = '\0';
