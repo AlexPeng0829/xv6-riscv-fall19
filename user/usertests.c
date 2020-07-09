@@ -1970,8 +1970,8 @@ pgbug(char *s)
 {
   char *argv[1];
   argv[0] = 0;
+  //TODO; figure out at which point exec return -1
   exec((char*)0xeaeb0b5b00002f5e, argv);
-
   pipe((int*)0xeaeb0b5b00002f5e);
 
   exit(0);
@@ -2124,6 +2124,11 @@ main(int argc, char *argv[])
     void (*f)(char *);
     char *s;
   } tests[] = {
+    // {pgbug, "pgbug" },
+    // {sbrkbugs, "sbrkbugs" },
+    // {badwrite, "badwrite" },
+    // {argptest, "argptest"},
+    // { 0, 0},
     {reparent2, "reparent2"},
     {pgbug, "pgbug" },
     {sbrkbugs, "sbrkbugs" },
