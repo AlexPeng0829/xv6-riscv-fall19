@@ -99,8 +99,12 @@ struct proc {
   uint64 sz;                   // Size of process memory (bytes)
   pagetable_t pagetable;       // Page table
   struct trapframe *tf;        // data page for trampoline.S
+  struct trapframe *tf_sigalarm_save; // Save the trapframe to restore after sigreturn
   struct context context;      // swtch() here to run process
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  uint64 tick_interval;        // ticks after which sigalarm_handler execute
+  uint64 tick_count;           // how many ticks have passed since sigalarm begins
+  uint64 sigalarm_handler;
 };

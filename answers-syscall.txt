@@ -1,0 +1,5 @@
+1) a0-a7 hold the arguments to functions. a2 holds 13 in main's call to printf.
+2) In this case the function call to f from main is optimized by the compiler.
+   f(8)+1 is inlined and directed computed as 12 which is stored in a1.
+3) printf locates in 0x0000000000000660.
+4) 0x38.

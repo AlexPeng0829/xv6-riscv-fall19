@@ -114,6 +114,12 @@ found:
     return 0;
   }
 
+  // Allocate another trapframe for sigalarm.
+  if((p->tf_sigalarm_save = (struct trapframe *)kalloc()) == 0){
+    release(&p->lock);
+    return 0;
+  }
+
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
 
@@ -122,6 +128,11 @@ found:
   memset(&p->context, 0, sizeof p->context);
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+
+  // Initialize state to handle sigalarm
+  p->tick_count = 0;
+  p->tick_interval = 0;
+  p->sigalarm_handler = 0;
 
   return p;
 }
