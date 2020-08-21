@@ -3,8 +3,12 @@
 #include "memlayout.h"
 #include "elf.h"
 #include "riscv.h"
-#include "defs.h"
+#include "spinlock.h"
 #include "fs.h"
+#include "sleeplock.h"
+#include "file.h"
+#include "defs.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -157,7 +161,6 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 {
   uint64 a, last;
   pte_t *pte;
-
   a = PGROUNDDOWN(va);
   last = PGROUNDDOWN(va + size - 1);
   for(;;){
@@ -188,10 +191,23 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 size, int do_free)
   last = PGROUNDDOWN(va + size - 1);
   for(;;){
     if((pte = walk(pagetable, a, 0)) == 0)
-      panic("uvmunmap: walk");
+    {
+      if (a == last)
+          break;
+      a += PGSIZE;
+      pa += PGSIZE;
+      continue;
+      // panic("uvmunmap: walk");
+    }
     if((*pte & PTE_V) == 0){
-      printf("va=%p pte=%p\n", a, *pte);
-      panic("uvmunmap: not mapped");
+      // printf("va=%p pte=%p\n", a, *pte);
+      // panic("uvmunmap: not mapped");
+      *pte = 0;
+      if (a == last)
+          break;
+      a += PGSIZE;
+      pa += PGSIZE;
+      continue;
     }
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
@@ -326,9 +342,11 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
-      panic("uvmcopy: pte should exist");
+      // panic("uvmcopy: pte should exist");
+      continue;
     if((*pte & PTE_V) == 0)
-      panic("uvmcopy: page not present");
+      // panic("uvmcopy: page not present");
+      continue;
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
     if((mem = kalloc()) == 0)
@@ -450,4 +468,67 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+int handle_load_page_fault(struct proc* p, uint64 va_faulted)
+{
+  uint64 va_page;
+  char *mem;
+  uint64 addr_start;
+  uint64 addr_end;
+  uint64 length;
+  int i;
+  int n_read;
+  int offset;
+  struct inode* ip;
+  if(va_faulted > p->sz)
+  {
+    printf("Invalid memory access, try to access memory: %p higher than proc->sz:%p\n", va_faulted, p->sz);
+    p->killed = 1;
+    exit(-1);
+  }
+  va_page = PGROUNDDOWN(va_faulted);
+  mem = kalloc();
+  if(mem == 0)
+  {
+    printf("Running out of physical memory!\n");
+    // proc_freepagetable(p->pagetable, p->sz);
+    p->killed = 1;
+    exit(-1);
+  }
+  for(i = 0; i < NVMA; ++i)
+  {
+    addr_start = p->vma[i].addr;
+    length = (uint64)p->vma[i].length;
+    addr_end = p->vma[i].addr + length;
+
+    if(addr_start <= va_faulted && va_faulted < addr_end) // [begin, end)
+    {
+      break;
+    }
+  }
+  if(i == NVMA)
+  {
+    //TODO: not page fault not caused by mmap, should be handled by another handler such as lazy allocation handler
+    return -1;
+  }
+  memset(mem, 0, PGSIZE);
+  if(mappages(p->pagetable, va_page, PGSIZE, (uint64)mem, PTE_W | PTE_X | PTE_R | PTE_U) != 0)
+  {
+    kfree(mem);
+    printf("mapages failed!\n");
+    p->killed = 1;
+    exit(-1);
+  }
+
+  offset = va_page - p->vma[i].addr;
+  ip = (p->vma[i].filep)->ip;
+  ilock(ip);
+  n_read = readi(ip, 1, va_page, offset, PGSIZE);
+  iunlock(ip);
+  if(n_read < 0)
+  {
+    return -1;
+  }
+  return 1;
 }

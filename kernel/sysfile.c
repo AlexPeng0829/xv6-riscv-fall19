@@ -483,3 +483,150 @@ sys_pipe(void)
   return 0;
 }
 
+
+uint64
+sys_mmap(void)
+{
+  // addr and offset is not used
+  int length;
+  uint64 addr;
+  int prot;
+  int flags;
+  int fd;
+  struct file *filep;
+  int i;
+  struct proc* p = myproc();
+  argint(1, &length);
+  argint(2, &prot);
+  argint(3, &flags);
+  argfd(4, &fd, &filep);
+  // printf("[mmap] filep:%p\n",filep);
+  if(length < 0)
+  {
+    return -1;
+  }
+
+  addr = p->sz;
+  for(i = 0; i < NVMA; ++i)
+  {
+    if(p->vma[i].addr == 0)
+    {
+      if(prot & PROT_READ) // PROT_READ set
+      {
+        if(filep->readable == 0)
+        {
+          return -1;
+        }
+      }
+      if(prot & PROT_WRITE) // PROT_WRITE set
+      {
+        if(!(flags & MAP_PRIVATE)) // MAP_PRIVATE not set
+        {
+          if(filep->writable == 0) // file not writeble
+          {
+            return -1;
+          }
+        }
+      }
+      p->vma[i].addr = addr;
+      p->vma[i].length = length;
+      p->vma[i].prot = prot;
+      p->vma[i].flags = flags;
+      p->vma[i].filep = filep;
+      break;
+    }
+  }
+  if(i == NVMA)
+  {
+    return -1;
+  }
+  filedup(filep);
+  p->sz = p->sz + length;
+  // printf("addr: %p\n, length: %d\n", addr, length);
+  return addr;
+}
+
+
+void write_back(struct inode* ip, uint64 addr, int offset, int length)
+{
+  begin_op(ip->dev);
+  ilock(ip);
+  writei(ip, 1, addr, offset, length);
+  iunlock(ip);
+  end_op(ip->dev);
+}
+
+
+uint64
+sys_munmap(void)
+{
+  uint64 addr;
+  int length;
+  int i;
+  int file_unmaped = 0;
+  struct proc* p = myproc();
+  argaddr(0, &addr);
+  argint(1, &length);
+  for(i = 0; i < NVMA; ++i)
+  {
+    // if the addr is in the vma range
+    // for simplicity, assume munmap only happens at the begin/end of vma range, not in the middle of vma
+    //TODO: is unmapping the VM necessary?
+    if(p->vma[i].addr <= addr && addr <= p->vma[i].addr + p->vma[i].length)
+    {
+      // at the start of vma
+      if(addr == p->vma[i].addr)
+      {
+        if(p->vma[i].prot & PROT_WRITE && !(p->vma[i].flags & MAP_PRIVATE)) // write back to file
+        {
+          write_back((p->vma[i].filep)->ip, addr, 0, length);
+        }
+        uvmunmap(p->pagetable, addr, length, 1);
+        p->vma[i].length = p->vma[i].length - length;
+        p->vma[i].addr =  addr + length;
+        if(p->vma[i].length == 0)
+        {
+          file_unmaped = 1;
+        }
+        break;
+      }
+      // at the end of vma
+      else if(addr + length == p->vma[i].addr + p->vma[i].length)
+      {
+        if(p->vma[i].prot & PROT_WRITE && !(p->vma[i].flags & MAP_PRIVATE)) // write back to file
+        {
+          write_back((p->vma[i].filep)->ip, addr, addr - p->vma[i].addr, length);
+
+        }
+        uvmunmap(p->pagetable, addr, p->vma[i].length, 1);
+        if(addr == p->vma[i].addr)
+        {
+          file_unmaped = 1;
+        }
+        p->vma[i].length = p->vma[i].length - length;
+        break;
+      }
+      // not implemented yet
+      else
+      {
+        return -1;
+      }
+    }
+  }
+
+  // clear the vma when entire file is unmapped
+  if(file_unmaped)
+  {
+    p->vma[i].addr = 0;
+    p->vma[i].prot = 0;
+    p->vma[i].flags = 0;
+    fileclose(p->vma[i].filep);
+    p->vma[i].filep = (struct file*)0;
+  }
+  // not found
+  if(i == NVMA)
+  {
+    return -1;
+  }
+  return 1;
+}

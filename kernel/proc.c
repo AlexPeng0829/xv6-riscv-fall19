@@ -241,6 +241,17 @@ growproc(int n)
   return 0;
 }
 
+void
+copy_vma(struct vma_t* from, struct vma_t* to)
+{
+  to->addr = from->addr;
+  to->filep = from->filep;
+  to->flags = from->flags;
+  to->length = from->length;
+  to->prot = from->prot;
+}
+
+
 // Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
 int
@@ -276,6 +287,15 @@ fork(void)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
+  // increment reference counts on mmaped file
+  for(i = 0; i < NVMA; i++)
+  {
+    if(p->vma[i].addr != 0)
+    {
+      filedup(p->vma[i].filep);
+    }
+    copy_vma(p->vma, np->vma);
+  }
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
@@ -333,7 +353,17 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
-
+  for(int i = 0; i < NVMA; i++){
+    if(p->vma[i].addr != 0)
+    {
+      uvmunmap(p->pagetable, p->vma[i].addr, p->vma[i].length, 1);
+      p->vma[i].addr = 0;
+      p->vma[i].prot = 0;
+      p->vma[i].flags = 0;
+      fileclose(p->vma[i].filep);
+      p->vma[i].filep = (struct file*)0;
+    }
+  }
   begin_op(ROOTDEV);
   iput(p->cwd);
   end_op(ROOTDEV);
