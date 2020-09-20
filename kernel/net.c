@@ -222,7 +222,6 @@ net_tx_arp(uint16 op, uint8 dmac[ETHADDR_LEN], uint32 dip)
 {
   struct mbuf *m;
   struct arp *arphdr;
-
   m = mbufalloc(MBUF_DEFAULT_HEADROOM);
   if (!m)
     return -1;
@@ -253,7 +252,6 @@ net_rx_arp(struct mbuf *m)
   struct arp *arphdr;
   uint8 smac[ETHADDR_LEN];
   uint32 sip, tip;
-
   arphdr = mbufpullhdr(m, *arphdr);
   if (!arphdr)
     goto done;
@@ -276,6 +274,7 @@ net_rx_arp(struct mbuf *m)
   memmove(smac, arphdr->sha, ETHADDR_LEN); // sender's ethernet address
   sip = ntohl(arphdr->sip); // sender's IP address (qemu's slirp)
   net_tx_arp(ARP_OP_REPLY, smac, sip);
+  return;
 
 done:
   mbuffree(m);
@@ -288,7 +287,6 @@ net_rx_udp(struct mbuf *m, uint16 len, struct ip *iphdr)
   struct udp *udphdr;
   uint32 sip;
   uint16 sport, dport;
-
 
   udphdr = mbufpullhdr(m, *udphdr);
   if (!udphdr)
@@ -322,7 +320,6 @@ net_rx_ip(struct mbuf *m)
 {
   struct ip *iphdr;
   uint16 len;
-
   iphdr = mbufpullhdr(m, *iphdr);
   if (!iphdr)
 	  goto fail;
@@ -366,9 +363,13 @@ void net_rx(struct mbuf *m)
 
   type = ntohs(ethhdr->type);
   if (type == ETHTYPE_IP)
+  {
     net_rx_ip(m);
+  }
   else if (type == ETHTYPE_ARP)
+  {
     net_rx_arp(m);
+  }
   else
     mbuffree(m);
 }

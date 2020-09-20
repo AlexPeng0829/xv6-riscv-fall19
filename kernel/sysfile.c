@@ -66,14 +66,12 @@ sys_connect(void)
       argint(2, (int*)&rport) < 0) {
     return -1;
   }
-
   if(sockalloc(&f, raddr, lport, rport) < 0)
     return -1;
   if((fd=fdalloc(f)) < 0){
     fileclose(f);
     return -1;
   }
-
   return fd;
 }
 

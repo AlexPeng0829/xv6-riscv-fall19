@@ -92,36 +92,63 @@ e1000_init(uint32 *xregs)
   regs[E1000_IMS] = (1 << 7); // RXDW -- Receiver Descriptor Write Back
 }
 
+//TODO: 1) Consider locking
+//TODO: 2) Correct error handling
 int
 e1000_transmit(struct mbuf *m)
 {
-  //
-  // Your code here.
-  //
   // the mbuf contains an ethernet frame; program it into
   // the TX descriptor ring so that the e1000 sends it. Stash
   // a pointer so that it can be freed after sending.
   //
-  return -1;
+  acquire(&e1000_lock);
+  struct tx_desc* tail = (struct tx_desc*)(regs[E1000_TDBAL] + sizeof(struct tx_desc) * regs[E1000_TDT]);
+  if((tail->status & 0x1) != E1000_TXD_STAT_DD)
+  {
+    release(&e1000_lock);
+    return -1;
+  }
+  tail->addr = (uint64)m->head;
+  tail->length = (uint16)m->len;
+  tail->cmd = 1;
+  regs[E1000_TDT] = (regs[E1000_TDT] + 1) % TX_RING_SIZE;
+  //TODO: return -1 if fail
+  release(&e1000_lock);
+  return 0;
 }
 
 static void
 e1000_recv(void)
 {
-  //
-  // Your code here.
-  //
   // Check for packets that have arrived from the e1000
   // Create and deliver an mbuf for each packet (using net_rx()).
   //
+  acquire(&e1000_lock);
+  uint32 offset = (regs[E1000_RDT] + 1) % RX_RING_SIZE;
+  struct rx_desc* cur = (struct rx_desc*)(regs[E1000_RDBAL] + sizeof(struct rx_desc) * offset);
+  if((cur->status & 0x1) != E1000_RXD_STAT_DD)
+  {
+    release(&e1000_lock);
+    return;
+  }
+  struct mbuf* bufp = mbufbegin(cur->addr); // seriously???
+  mbufput(bufp, cur->length);
+  release(&e1000_lock);
+  net_rx(bufp);
+  struct mbuf* m = mbufalloc(0);
+  acquire(&e1000_lock);
+  cur->addr = (uint64) m->head;
+  cur->status = 0;
+  regs[E1000_RDT] += 1;
+  release(&e1000_lock);
 }
 
 void
 e1000_intr(void)
 {
   e1000_recv();
+  regs[E1000_ICR];
   // tell the e1000 we've seen this interrupt;
   // without this the e1000 won't raise any
   // further interrupts.
-  regs[E1000_ICR];
 }

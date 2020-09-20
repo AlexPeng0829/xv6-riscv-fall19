@@ -29,6 +29,7 @@ char *mbuftrim(struct mbuf *m, unsigned int len);
 #define mbufpushhdr(mbuf, hdr) (typeof(hdr)*)mbufpush(mbuf, sizeof(hdr))
 #define mbufputhdr(mbuf, hdr) (typeof(hdr)*)mbufput(mbuf, sizeof(hdr))
 #define mbuftrimhdr(mbuf, hdr) (typeof(hdr)*)mbuftrim(mbuf, sizeof(hdr))
+#define mbufbegin(buf) (struct mbuf*)((uint64)buf - sizeof(struct mbuf*) - sizeof(char*) - sizeof(unsigned int))
 
 struct mbuf *mbufalloc(unsigned int headroom);
 void mbuffree(struct mbuf *m);

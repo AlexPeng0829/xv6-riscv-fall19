@@ -166,6 +166,11 @@ clockintr()
 {
   acquire(&tickslock);
   ticks++;
+  // Add this as polling for incomming network pakcets
+  // this is a workaround as new packet might not cause
+  // interrupt if inerruption is disabled thus a deadlock
+  // could happen
+  e1000_intr();
   wakeup(&ticks);
   release(&tickslock);
 }
