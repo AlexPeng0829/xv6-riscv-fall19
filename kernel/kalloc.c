@@ -27,7 +27,9 @@ void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
-  freerange(end, (void*)PHYSTOP);
+  void *p = (void*)PHYSTOP - MAXHEAP;
+  freerange(end, p);
+  bd_init(p, p+MAXHEAP);
 }
 
 void
@@ -35,7 +37,6 @@ freerange(void *pa_start, void *pa_end)
 {
   char *p;
   p = (char*)PGROUNDUP((uint64)pa_start);
-  p += 4096; // XXX I can't get kernel.ld to place end beyond the last bss symbol.
   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
     kfree(p);
 }

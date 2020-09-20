@@ -18,12 +18,12 @@ int main(int argc, char **argv)
     if (argc == 1)
     {
         fprintf(2, "usage: xargs expects extra arguments\n");
-        exit();
+        exit(-1);
     }
     if (argc > MAXARG)
     {
         fprintf(2, "error: too many arguments for xargs\n");
-        exit();
+        exit(-1);
     }
     for (; j < argc; ++j)
     {
@@ -47,7 +47,7 @@ int main(int argc, char **argv)
     if (idx + argc > MAXARG - 1)
     {
         fprintf(2, "Error: input arguments exceed maximum allowed!\n");
-        exit();
+        exit(-1);
     }
     input_argv[idx + 1] = (char *)0; //mark end of input arg
 
@@ -55,12 +55,12 @@ int main(int argc, char **argv)
     if (fork() == 0)
     {
         exec(argv[1], (char **)(input_argv));
-        exit();
+        exit(0);
     }
-    if (wait() < 0)
+    if (wait(0) < 0)
     {
         fprintf(2, "Wait error!\n");
-        exit();
+        exit(-1);
     }
-    exit();
+    exit(0);
 }

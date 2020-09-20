@@ -7,8 +7,8 @@ int main(int argc, char **argv)
     if (argc < 2)
     {
         fprintf(2, "usage: sleep <tick>...\n");
-        exit();
+        exit(-1);
     }
     sleep(atoi(argv[1]));
-    exit();
+    exit(0);
 }

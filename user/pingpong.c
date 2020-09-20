@@ -13,7 +13,7 @@ int main(int argc, char **argv)
     if (argc != 1)
     {
         fprintf(2, "usage: pingpong\n");
-        exit();
+        exit(-1);
     }
     pipe(parent_fd);
     pipe(child_fd);
@@ -28,7 +28,7 @@ int main(int argc, char **argv)
         {
             fprintf(2, "read error!\n");
         }
-        exit();
+        exit(0);
     }
     write(parent_fd[1], (void *)ping, sizeof(ping));
     if (read(child_fd[0], (void *)buffer, sizeof(buffer)) > 0)
@@ -39,5 +39,5 @@ int main(int argc, char **argv)
     {
         fprintf(2, "read error!\n");
     }
-    exit();
+    exit(0);
 }

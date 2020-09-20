@@ -30,14 +30,14 @@ void next_child(int *parent_fds)
         }
         close(parent_fds[0]);
         close(fd_pair[1]);
-        if (wait() < 0)
+        if (wait(0) < 0)
         {
             fprintf(2, "wait error!\n");
         }
-        exit();
+        exit(-1);
     }
 
-    exit();
+    exit(0);
 }
 
 int main(int argc, char **argv)
@@ -46,7 +46,7 @@ int main(int argc, char **argv)
     if (argc != 1)
     {
         fprintf(2, "usage: primes\n");
-        exit();
+        exit(-1);
     }
     pipe(parent_fds);
 
@@ -63,9 +63,10 @@ int main(int argc, char **argv)
             write(parent_fds[1], (void *)&j, sizeof(int));
     }
     close(parent_fds[1]);
-    if (wait() < 0)
+    if (wait(0) < 0)
     {
         fprintf(2, "wait error!\n");
+        exit(-1);
     }
-    exit();
+    exit(0);
 }

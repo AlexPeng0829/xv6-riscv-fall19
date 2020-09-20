@@ -79,8 +79,8 @@ int main(int argc, char **argv)
     if (argc != 3)
     {
         fprintf(2, "usage: find <dir> <file>\n");
-        exit();
+        exit(-1);
     }
     find(argv[1], argv[2]);
-    exit();
+    exit(0);
 }
