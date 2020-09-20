@@ -1,1 +1,1 @@
-LAB=sh
+LAB=util sh
