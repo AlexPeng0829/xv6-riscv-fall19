@@ -1,1 +1,1 @@
-LAB=util sh
+LAB=util sh lazy

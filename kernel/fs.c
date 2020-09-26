@@ -466,6 +466,10 @@ readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
     return -1;
   if(off + n > ip->size)
     n = ip->size - off;
+  // if use virtual address, check if it's within the process size
+  if(user_dst && dst + n > myproc()->sz){
+    return -1;
+  }
 
   for(tot=0; tot<n; tot+=m, off+=m, dst+=m){
     bp = bread(ip->dev, bmap(ip, off/BSIZE));
@@ -505,10 +509,15 @@ writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
     brelse(bp);
   }
 
-  if(n > 0 && off > ip->size){
-    ip->size = off;
+  if(n > 0){
+    if(off > ip->size)
+      ip->size = off;
+    // write the i-node back to disk even if the size didn't change
+    // because the loop above might have called bmap() and added a new
+    // block to ip->addrs[].
     iupdate(ip);
   }
+
   return n;
 }
 

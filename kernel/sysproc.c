@@ -11,10 +11,10 @@ uint64
 sys_exit(void)
 {
   int n;
-  if(argint(0, &n) < 0)
+  if (argint(0, &n) < 0)
     return -1;
   exit(n);
-  return 0;  // not reached
+  return 0; // not reached
 }
 
 uint64
@@ -33,7 +33,7 @@ uint64
 sys_wait(void)
 {
   uint64 p;
-  if(argaddr(0, &p) < 0)
+  if (argaddr(0, &p) < 0)
     return -1;
   return wait(p);
 }
@@ -41,15 +41,32 @@ sys_wait(void)
 uint64
 sys_sbrk(void)
 {
-  int addr;
+  int addr_old;
   int n;
+  if (argint(0, &n) < 0)
+    return -1;
+  addr_old = myproc()->sz;
+  if (n < 0)
+  {
+    int addr_free_start = PGROUNDUP(addr_old + n);
+    int addr_freed;
+    // printf("---------------------before free_pagetable---------------------\n");
+    // vmprint(myproc()->pagetable);
 
-  if(argint(0, &n) < 0)
-    return -1;
-  addr = myproc()->sz;
-  if(growproc(n) < 0)
-    return -1;
-  return addr;
+    // after round up if addr_free_start goes to another page, skip
+    if (addr_free_start < addr_old)
+    {
+      addr_freed = addr_old - addr_free_start;
+
+      uvmunmap(myproc()->pagetable, addr_free_start, addr_freed, 1);
+      free_pagetable(myproc()->pagetable, addr_free_start);
+
+      // printf("---------------------after free_pagetable---------------------\n");
+      // vmprint(myproc()->pagetable);
+    }
+  }
+  myproc()->sz += n;
+  return addr_old;
 }
 
 uint64
@@ -58,12 +75,14 @@ sys_sleep(void)
   int n;
   uint ticks0;
 
-  if(argint(0, &n) < 0)
+  if (argint(0, &n) < 0)
     return -1;
   acquire(&tickslock);
   ticks0 = ticks;
-  while(ticks - ticks0 < n){
-    if(myproc()->killed){
+  while (ticks - ticks0 < n)
+  {
+    if (myproc()->killed)
+    {
       release(&tickslock);
       return -1;
     }
@@ -78,7 +97,7 @@ sys_kill(void)
 {
   int pid;
 
-  if(argint(0, &pid) < 0)
+  if (argint(0, &pid) < 0)
     return -1;
   return kill(pid);
 }

@@ -120,6 +120,7 @@ mkfs/mkfs: mkfs/mkfs.c $K/fs.h
 .PRECIOUS: %.o
 
 UPROGS=\
+	$U/_lazytests\
 	$U/_cat\
 	$U/_echo\
 	$U/_forktest\
@@ -136,7 +137,7 @@ UPROGS=\
 	$U/_usertests\
 	$U/_wc\
 	$U/_zombie\
-	$U/_cow\
+	$U/_cowtest\
 	$U/_uthread\
 	$U/_call\
 	$U/_testsh\
@@ -175,8 +176,7 @@ CPUS := 3
 endif
 
 QEMUEXTRA = -drive file=fs1.img,if=none,format=raw,id=x1 -device virtio-blk-device,drive=x1,bus=virtio-mmio-bus.1
-
-QEMUOPTS = -machine virt -kernel $K/kernel -m 3G -smp $(CPUS) -nographic
+QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 3G -smp $(CPUS) -nographic
 QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 
 qemu: $K/kernel fs.img
@@ -186,7 +186,7 @@ qemu: $K/kernel fs.img
 	sed "s/:1234/:$(GDBPORT)/" < $^ > $@
 
 qemu-gdb: $K/kernel .gdbinit fs.img
-	@echo "*** Now run 'gdb'." 1>&2
+	@echo "*** Now run 'gdb' in another window." 1>&2
 	$(QEMU) $(QEMUOPTS) -S $(QEMUGDB)
 
 
@@ -208,7 +208,7 @@ grade:
 	@$(MAKE) clean || \
 	  (echo "'make clean' failed.  HINT: Do you have another running instance of xv6?" && exit 1)
 	$(foreach EACH_LAB,$(LAB), ./grade-lab-$(EACH_LAB) $(GRADEFLAGS); \
-	echo ============================='\n'Finish testing lab-$(EACH_LAB);)
+	echo Finish testing lab-$(EACH_LAB)'\n'=========================================================='\n';)
 
 WEBSUB := https://6828.scripts.mit.edu/2019/handin.py
 
@@ -244,6 +244,9 @@ handin-check:
 
 UPSTREAM := $(shell git remote -v | grep -m 1 "mit-pdos/xv6-riscv-fall19" | awk '{split($$0,a," "); print a[1]}')
 
+tarball: handin-check
+	git archive --format=tar HEAD | gzip > lab-$(LAB)-handin.tar.gz
+
 tarball-pref: handin-check
 	@SUF=$(LAB); \
 	git archive --format=tar HEAD > lab-$$SUF-handin.tar; \
@@ -272,4 +275,4 @@ myapi.key:
 	fi;
 
 
-.PHONY: handin tarball-pref clean grade handin-check
+.PHONY: handin tarball tarball-pref clean grade handin-check
