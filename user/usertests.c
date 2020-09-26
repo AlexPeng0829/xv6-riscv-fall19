@@ -2124,11 +2124,10 @@ main(int argc, char *argv[])
     void (*f)(char *);
     char *s;
   } tests[] = {
-    // {pgbug, "pgbug" },
-    // {sbrkbugs, "sbrkbugs" },
-    // {badwrite, "badwrite" },
-    // {argptest, "argptest"},
-    // { 0, 0},
+    {pgbug, "pgbug" },
+    {sbrkbugs, "sbrkbugs" },
+    {badwrite, "badwrite" },
+    {argptest, "argptest"},
     {reparent2, "reparent2"},
     {pgbug, "pgbug" },
     {sbrkbugs, "sbrkbugs" },
