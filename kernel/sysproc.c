@@ -50,19 +50,13 @@ sys_sbrk(void)
   {
     int addr_free_start = PGROUNDUP(addr_old + n);
     int addr_freed;
-    // printf("---------------------before free_pagetable---------------------\n");
-    // vmprint(myproc()->pagetable);
 
     // after round up if addr_free_start goes to another page, skip
     if (addr_free_start < addr_old)
     {
       addr_freed = addr_old - addr_free_start;
-
       uvmunmap(myproc()->pagetable, addr_free_start, addr_freed, 1);
       free_pagetable(myproc()->pagetable, addr_free_start);
-
-      // printf("---------------------after free_pagetable---------------------\n");
-      // vmprint(myproc()->pagetable);
     }
   }
   myproc()->sz += n;

@@ -203,7 +203,7 @@ userinit(void)
 
   p = allocproc();
   initproc = p;
-  
+
   // allocate one user page and copy init's instructions
   // and data into it.
   uvminit(p->pagetable, initcode, sizeof(initcode));
@@ -219,7 +219,6 @@ userinit(void)
   p->state = RUNNABLE;
 
   release(&p->lock);
-  // vmprint(p->pagetable);
 }
 
 // Grow or shrink user memory by n bytes.
