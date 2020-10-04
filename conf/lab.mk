@@ -1,1 +1,1 @@
-LAB=util sh lazy
+LAB=util sh lazy cow

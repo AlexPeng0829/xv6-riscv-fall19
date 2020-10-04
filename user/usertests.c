@@ -1707,13 +1707,13 @@ void
 sbrkfail(char *s)
 {
   enum { BIG=100*1024*1024 };
-  int i, xstatus;
+  int i;
   int fds[2];
   char scratch;
   char *c, *a;
   int pids[10];
   int pid;
- 
+
   if(pipe(fds) != 0){
     printf("%s: pipe() failed\n", s);
     exit(1);
@@ -1729,7 +1729,6 @@ sbrkfail(char *s)
     if(pids[i] != -1)
       read(fds[0], &scratch, 1);
   }
-
   // if those failed allocations freed up the pages they did allocate,
   // we'll be able to allocate here
   c = sbrk(PGSIZE);
@@ -1761,6 +1760,7 @@ sbrkfail(char *s)
     printf("%s: allocate a lot of memory succeeded %d\n", n);
     exit(1);
   }
+  int xstatus = 0;
   wait(&xstatus);
   if(xstatus != -1)
     exit(1);
@@ -1970,7 +1970,6 @@ pgbug(char *s)
   char *argv[1];
   argv[0] = 0;
   exec((char*)0xeaeb0b5b00002f5e, argv);
-
   pipe((int*)0xeaeb0b5b00002f5e);
 
   exit(0);

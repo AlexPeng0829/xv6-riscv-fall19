@@ -112,7 +112,8 @@ void vmprint_one_level(pagetable_t pagetable, int level)
             {
                 printf(" ..");
             }
-            printf("%d: pte %p pa %p\n", i, pte, child);
+            // printf("%d: pte %p pa %p\n", i, pte, child);
+            printf("%d: pte %p pa %p [ref:%d] [flag:%b]\n", i, pte, child, get_ref_count((uint8 *)child), PTE_FLAGS(pte));
             if (level < 2)
             {
                 vmprint_one_level((pagetable_t)child, level + 1);
@@ -249,8 +250,8 @@ void uvmunmap(pagetable_t pagetable, uint64 va, uint64 size, int do_free)
             pa += PGSIZE;
             continue;
         }
-        if (PTE_FLAGS(*pte) == PTE_V)
-            panic("uvmunmap: not a leaf");
+        // if (PTE_FLAGS(*pte) == PTE_V)
+        //     panic("uvmunmap: not a leaf");
         if (do_free)
         {
             pa = PTE2PA(*pte);
@@ -457,39 +458,40 @@ void uvmfree(pagetable_t pagetable, uint64 sz)
 // physical memory.
 // returns 0 on success, -1 on failure.
 // frees any allocated pages on failure.
-int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
+int
+uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
-    pte_t *pte;
-    uint64 pa, i;
-    uint flags;
-    char *mem;
-    for (i = 0; i < sz; i += PGSIZE)
+  pte_t *pte;
+  uint64 pa, i;
+  uint8 count_old;
+  uint perm;
+  uint64 pte_w_clear;
+
+
+  for(i = 0; i < sz; i += PGSIZE){
+    if((pte = walk(old, i, 0)) == 0){
+    //   panic("uvmcopy: pte should exist");
+        continue;
+    }
+    if((*pte & PTE_V) == 0){
+    //   panic("uvmcopy: page not present");
+        continue;
+    }
+    pa = PTE2PA(*pte);
+    pte_w_clear = ~0 - PTE_W;
+    perm = PTE_FLAGS(*pte);
+    perm |= PTE_COW;         // set COW bit
+    perm &= pte_w_clear;     // clear the PTE_W
+    *pte = ((*pte >> 8) << 8) | perm; // change the parent process's permission bits
+
+    count_old = get_ref_count((uint8 *)pa);
+    set_ref_count((uint8 *)pa, count_old +1); // increment the ref count for each page
+    if(mappages(new, i, PGSIZE, (uint64)pa, perm) != 0)
     {
-        if ((pte = walk(old, i, 0)) == 0)
-            continue;
-        // panic("uvmcopy: pte should exist");
-        if ((*pte & PTE_V) == 0)
-        {
-            continue;
-            // panic("uvmcopy: page not present");
-        }
-        pa = PTE2PA(*pte);
-        flags = PTE_FLAGS(*pte);
-        if ((mem = kalloc()) == 0)
-            goto err;
-        memmove(mem, (char *)pa, PGSIZE);
-        if (mappages(new, i, PGSIZE, (uint64)mem, flags) != 0)
-        {
-            kfree(mem);
-            goto err;
-        }
+      return -1;
+    }
     }
     return 0;
-
-err:
-    printf("in uvmunmap\n");
-    uvmunmap(new, 0, i, 1);
-    return -1;
 }
 
 // mark a PTE invalid for user access.
@@ -504,13 +506,73 @@ void uvmclear(pagetable_t pagetable, uint64 va)
     *pte &= ~PTE_U;
 }
 
+// Map the PTE to newly allocated physical pages, set the PTE_W and clear PTE_COW
+// @return 0 on success -1 if no valid pte is found
+int map_cow_page(pagetable_t page_table, uint64 va, uint64 pa)
+{
+  pte_t *pte;
+  uint pte_cow_clear = ~0 - PTE_COW;
+  uint perm;
+
+  if ((pte = walk(page_table, va, 0)) == 0)
+    return -1;
+  if (!(*pte & PTE_V)){
+    return -1;
+  }
+  perm = PTE_FLAGS(*pte) | PTE_W;     // set the PTE_W for newly allocated page
+  perm = perm & pte_cow_clear;             // remove COW bit for newly allocated page
+  *pte = PA2PTE(pa) | perm | PTE_V;
+  return 0;
+}
+
+/**
+ * @brief handle copy-on-write page, allocate page for the page faulted and clear the
+ * copy-on-write bit for it.
+ * @param p process that has the copy-on-write page
+ * @param va_faulted page copy-on-write bit of which is set
+ * @param pte pte for the faulted page
+ * @return int 0 on success -1 on failure
+ */
+int handle_cow_page(struct proc* p, uint64 va_faulted, pte_t *pte)
+{
+    uint8 ref_count;
+    uint64 pa = PTE2PA(*pte);
+    ref_count = get_ref_count((uint8 *)pa);
+    // only one process is using this page, clear COW bit and restore W bit
+    if(ref_count == 1)
+    {
+      uint perm = PTE_FLAGS(*pte);
+      uint pte_cow_clear = ~0 - PTE_COW;
+      perm |= PTE_W;          // restore the PTE_W
+      perm &= pte_cow_clear;  // clear the PTE_COW
+      *pte = PA2PTE(pa) | perm | PTE_V;
+    }
+    else
+    {
+      char *mem;
+      if ((mem = kalloc()) == 0)
+      {
+        printf("handle_cow_page(): failed to allocate more physical memory for copy-on-write page!\n");
+        return -1;
+      }
+      set_ref_count((uint8 *)pa, ref_count - 1);
+      memmove(mem, (char *)pa, PGSIZE);
+      if (map_cow_page(p->pagetable, va_faulted, (uint64)mem) != 0)
+      {
+          kfree(mem);
+          printf("handle_cow_page(): failed to map pages for copy-on-write page!\n");
+          return -1;
+      }
+    }
+    return 0;
+}
+
 // Copy from kernel to user.
 // Copy len bytes from src to virtual address dstva in a given page table.
 // Return 0 on success, -1 on error.
 int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
     uint64 n, va0, pa0;
-
     while (len > 0)
     {
         if (dstva > TRAPFRAME)
@@ -518,6 +580,18 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
             return -1;
         }
         va0 = PGROUNDDOWN(dstva);
+        pte_t *pte;
+        if ((pte = walk(pagetable, dstva, 0)) != 0)
+        {
+            if ((*pte & PTE_COW) && (*pte & PTE_V))
+            {
+                if(handle_cow_page(myproc(), va0, pte) != 0)
+                {
+                    return -1;
+                }
+            }
+
+        }
         pa0 = walkaddr(pagetable, va0);
         if (pa0 == -1)
         {
@@ -525,7 +599,10 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
         }
         if (pa0 == 0)
         {
-            handle_page_fault(myproc(), va0);
+            if(handle_lazy_allocation(myproc(), va0) != 0)
+            {
+                return -1;
+            }
             pa0 = walkaddr(pagetable, va0);
         }
         n = PGSIZE - (dstva - va0);
@@ -538,39 +615,6 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
         dstva = va0 + PGSIZE;
     }
     return 0;
-}
-
-// Handle page fault, used in both usertrap and some other syscall functions
-
-void handle_page_fault(struct proc *p, uint64 va_faulted)
-{
-    uint64 va_page;
-    char *mem;
-    if (va_faulted > p->sz)
-    {
-        printf("Invalid memory access, try to access memory: %p higher than proc->sz:%p\n", va_faulted, p->sz);
-        p->killed = 1;
-        exit(-1);
-    }
-
-    va_page = PGROUNDDOWN(va_faulted);
-    mem = kalloc();
-    if (mem == 0)
-    {
-        printf("Running out of physical memory!\n");
-        // proc_freepagetable(p->pagetable, p->sz);
-        p->killed = 1;
-        exit(-1);
-    }
-    memset(mem, 0, PGSIZE);
-    if (mappages(p->pagetable, va_page, PGSIZE, (uint64)mem, PTE_W | PTE_X | PTE_R | PTE_U) != 0)
-    {
-        kfree(mem);
-        printf("mapages failed!\n");
-        // proc_freepagetable(p->pagetable, p->sz);
-        p->killed = 1;
-        exit(-1);
-    }
 }
 
 // Copy from user to kernel.
@@ -590,7 +634,7 @@ int copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
         pa0 = walkaddr(pagetable, va0);
         if (pa0 == 0)
         {
-            handle_page_fault(myproc(), va0);
+            handle_lazy_allocation(myproc(), va0);
             pa0 = walkaddr(pagetable, va0);
         }
         n = PGSIZE - (srcva - va0);
@@ -653,4 +697,67 @@ int copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     {
         return -1;
     }
+}
+
+/**
+ * @brief handle store fault, which would be caused by both copy-on-write and
+ * lazy allocation
+ * @param p process that has store fault
+ * @param va_faulted page that's store faulted
+ * @return int 0 on success -1 on failure
+ */
+int handle_store_fault(struct proc* p, uint64 va_faulted)
+{
+    pte_t *pte;
+    if(va_faulted > MAXVA)
+    {
+      return -1;
+    }
+    if ((pte = walk(p->pagetable, va_faulted, 0)) == 0)
+    {
+        return handle_lazy_allocation(p, va_faulted);
+    }
+    if ((*pte & PTE_V) == 0)
+    {
+        return handle_lazy_allocation(p, va_faulted);
+    }
+    if (*pte & PTE_COW)
+    {
+        return handle_cow_page(p, va_faulted, pte);
+    }
+    return -1;
+}
+
+/**
+ * @brief Handle page fault caused by lazy allocation, used in both usertrap and some other syscall functions
+ *
+ * @param p process has page fault
+ * @param va_faulted page that's load/store faulted
+ * @return int 0 on success -1 on failure
+ */
+int handle_lazy_allocation(struct proc *p, uint64 va_faulted)
+{
+    uint64 va_page;
+    char *mem;
+    if (va_faulted > p->sz)
+    {
+        printf("Invalid memory access, try to access memory: %p higher than proc->sz:%p\n", va_faulted, p->sz);
+        return -1;
+    }
+
+    va_page = PGROUNDDOWN(va_faulted);
+    mem = kalloc();
+    if (mem == 0)
+    {
+        printf("Running out of physical memory!\n");
+        return -1;
+    }
+    memset(mem, 0, PGSIZE);
+    if (mappages(p->pagetable, va_page, PGSIZE, (uint64)mem, PTE_W | PTE_X | PTE_R | PTE_U) != 0)
+    {
+        kfree(mem);
+        printf("mapages failed!\n");
+        return -1;
+    }
+    return 0;
 }

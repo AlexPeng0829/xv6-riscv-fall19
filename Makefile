@@ -34,7 +34,7 @@ OBJS = \
 
 # riscv64-unknown-elf- or riscv64-linux-gnu-
 # perhaps in /opt/riscv/bin
-TOOLPREFIX = riscv64-unknown-elf-
+TOOLPREFIX = riscv64-unknown-linux-gnu-
 
 # Try to infer the correct TOOLPREFIX if not set
 ifndef TOOLPREFIX
@@ -207,7 +207,7 @@ grade:
 	@echo $(MAKE) clean
 	@$(MAKE) clean || \
 	  (echo "'make clean' failed.  HINT: Do you have another running instance of xv6?" && exit 1)
-	$(foreach EACH_LAB,$(LAB), ./grade-lab-$(EACH_LAB) $(GRADEFLAGS); \
+	$(foreach EACH_LAB,$(LAB), make clean && ./grade-lab-$(EACH_LAB) $(GRADEFLAGS);\
 	echo Finish testing lab-$(EACH_LAB)'\n'=========================================================='\n';)
 
 WEBSUB := https://6828.scripts.mit.edu/2019/handin.py

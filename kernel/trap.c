@@ -43,10 +43,8 @@ void usertrap(void)
   w_stvec((uint64)kernelvec);
 
   struct proc *p = myproc();
-
   // save user program counter.
   p->tf->epc = r_sepc();
-
   if (r_scause() == 8)
   {
     // system call
@@ -65,12 +63,25 @@ void usertrap(void)
     syscall();
   }
 
-  // page fault
-  else if (r_scause() == 13 || r_scause() == 15)
+  // handle store page fault, it might be
+  // caused by copy-on-write or lazy allocation
+  else if (r_scause() == 15)
   {
-    handle_page_fault(p, r_stval());
+    if(handle_store_fault(p, r_stval()) != 0)
+    {
+      p->killed = 1;
+    }
   }
-
+  // handle load page fault, which might be caused by lazy
+  // allocation. seems that r_scause() == 12 (instruction page fault)
+  // is not gonna happen currently
+  else if (r_scause() == 12 || r_scause() == 13)
+  {
+    if(handle_lazy_allocation(p, r_stval()) != 0)
+    {
+      p->killed = 1;
+    }
+  }
   else if ((which_dev = devintr()) != 0)
   {
     // ok
@@ -150,9 +161,30 @@ void kerneltrap()
     panic("kerneltrap: interrupts enabled");
   if ((which_dev = devintr()) == 0)
   {
-    printf("scause %p\n", scause);
-    printf("sepc=%p stval=%p\n", r_sepc(), r_stval());
-    panic("kerneltrap");
+    // handle store page fault
+    if (scause == 15)
+    {
+      if(handle_store_fault(myproc(), r_stval()) != 0)
+      {
+        myproc()->killed = 1;
+      }
+    }
+    // handle load page fault, which might be caused by lazy
+    // allocation. seems that r_scause() == 12 (instruction page fault)
+    // is not gonna happen currently
+    else if (scause == 12 || scause == 13)
+    {
+      if(handle_lazy_allocation(myproc(), r_stval()) != 0)
+      {
+        myproc()->killed = 1;
+      }
+    }
+    else
+    {
+      printf("scause %p\n", scause);
+      printf("sepc=%p stval=%p\n", r_sepc(), r_stval());
+      panic("kerneltrap");
+    }
   }
   
   // give up the CPU if this is a timer interrupt.
