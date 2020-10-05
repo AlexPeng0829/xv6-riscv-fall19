@@ -67,7 +67,7 @@ void usertrap(void)
   // caused by copy-on-write or lazy allocation
   else if (r_scause() == 15)
   {
-    if(handle_store_fault(p, r_stval()) != 0)
+    if (handle_store_fault(p, r_stval()) != 0)
     {
       p->killed = 1;
     }
@@ -77,7 +77,7 @@ void usertrap(void)
   // is not gonna happen currently
   else if (r_scause() == 12 || r_scause() == 13)
   {
-    if(handle_lazy_allocation(p, r_stval()) != 0)
+    if (handle_lazy_allocation(p, r_stval()) != 0)
     {
       p->killed = 1;
     }
@@ -98,7 +98,23 @@ void usertrap(void)
 
   // give up the CPU if this is a timer interrupt.
   if (which_dev == 2)
-    yield();
+  {
+    if (p->tick_interval == 0)
+    {
+      yield();
+    }
+    else
+    {
+      memmove(p->tf_sigalarm_save, p->tf, sizeof(*(p->tf)));
+      p->tick_count++;
+      if (p->tick_count == p->tick_interval)
+      {
+        p->tick_interval = 0;
+        p->tf->epc = p->sigalarm_handler;
+      }
+    }
+  }
+
   usertrapret();
 }
 
@@ -164,7 +180,7 @@ void kerneltrap()
     // handle store page fault
     if (scause == 15)
     {
-      if(handle_store_fault(myproc(), r_stval()) != 0)
+      if (handle_store_fault(myproc(), r_stval()) != 0)
       {
         myproc()->killed = 1;
       }
@@ -174,7 +190,7 @@ void kerneltrap()
     // is not gonna happen currently
     else if (scause == 12 || scause == 13)
     {
-      if(handle_lazy_allocation(myproc(), r_stval()) != 0)
+      if (handle_lazy_allocation(myproc(), r_stval()) != 0)
       {
         myproc()->killed = 1;
       }
@@ -186,7 +202,7 @@ void kerneltrap()
       panic("kerneltrap");
     }
   }
-  
+
   // give up the CPU if this is a timer interrupt.
   if (which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
     yield();

@@ -1,1 +1,1 @@
-LAB=util sh lazy cow
+LAB=util sh lazy cow syscall
