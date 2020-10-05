@@ -1334,8 +1334,8 @@ bigfile(char *s)
   enum { N = 20, SZ=600 };
   int fd, i, total, cc;
 
-  unlink("bigfile");
-  fd = open("bigfile", O_CREATE | O_RDWR);
+  unlink("bigfile.test");
+  fd = open("bigfile.test", O_CREATE | O_RDWR);
   if(fd < 0){
     printf("%s: cannot create bigfile", s);
     exit(1);
@@ -1349,7 +1349,7 @@ bigfile(char *s)
   }
   close(fd);
 
-  fd = open("bigfile", 0);
+  fd = open("bigfile.test", 0);
   if(fd < 0){
     printf("%s: cannot open bigfile\n", s);
     exit(1);
@@ -1378,7 +1378,7 @@ bigfile(char *s)
     printf("%s: read bigfile wrong total\n", s);
     exit(1);
   }
-  unlink("bigfile");
+  unlink("bigfile.test");
 }
 
 void

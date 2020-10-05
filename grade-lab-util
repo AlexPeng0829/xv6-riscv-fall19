@@ -40,7 +40,7 @@ def test_primes():
     r.run_qemu(shell_script([
         'primes', 'echo OK'
     ]))
-    args = ['prime %d' % i for i in [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31]]
+    args = ['prime %d' % i for i in [2, 3, 5, 7, 11, 13, 17, 19]]
     args.append('^OK$')
     r.match(*args)
 

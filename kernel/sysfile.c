@@ -15,6 +15,9 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "buf.h"
+
+#define MAX_RECURSIVE_DEPTH 10
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -252,7 +255,8 @@ create(char *path, short type, short major, short minor)
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
-    if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
+    if ((type == T_FILE || type == T_SYMLINK) &&
+        (ip->type == T_FILE || ip->type == T_SYMLINK || ip->type == T_DEVICE))
       return ip;
     iunlockput(ip);
     return 0;
@@ -283,6 +287,30 @@ create(char *path, short type, short major, short minor)
   return ip;
 }
 
+/// read the path from inode whose type is O_SYMLINK
+/// @return length of the path, -1 on failure
+int read_path_from_inode(struct inode* ip, char* path, int length)
+{
+    uint off = 0;
+    uint num_read = 128;
+    while(1){
+      readi(ip, 0, (uint64)path, off, num_read);
+      printf("\033[34m[read_path_from_inode]\033[0m path: %s, path len:%d\n", path, strlen(path));
+
+      for(int i = 0; i < num_read; ++i){
+        if(!path[i]){
+          return off;
+        }
+        if(off > length){
+          printf("open fail! path exceeds max length:%d\n", MAXPATH);
+          return -1;
+        }
+      }
+      path += num_read;
+      off += num_read;
+    }
+}
+
 uint64
 sys_open(void)
 {
@@ -291,6 +319,7 @@ sys_open(void)
   struct file *f;
   struct inode *ip;
   int n;
+  int loop_count = 0;
 
   if((n = argstr(0, path, MAXPATH)) < 0 || argint(1, &omode) < 0)
     return -1;
@@ -313,6 +342,42 @@ sys_open(void)
       iunlockput(ip);
       end_op(ROOTDEV);
       return -1;
+    }
+  }
+
+  // handle the symlink if O_NOFOLLOW is not set
+  if(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)){
+
+    char path[MAXPATH];
+    memset(path, 0, MAXPATH);
+    while(1){
+
+      if(read_path_from_inode(ip, path, MAXPATH) == -1){
+        iunlock(ip);
+        end_op(ROOTDEV);
+        return -1;
+      }
+
+      iunlock(ip);
+      if ((ip = namei(path)) == 0)
+      {
+        end_op(ROOTDEV);
+        return -1;
+      }
+      ilock(ip);
+
+      if(ip->type != T_SYMLINK){
+        break;
+      }
+
+      loop_count++;
+      if(loop_count > MAX_RECURSIVE_DEPTH){
+        iunlock(ip);
+        end_op(ROOTDEV);
+        printf("open fail! symlink link exceeds max depth:%d\n", MAX_RECURSIVE_DEPTH);
+        return -1;
+      }
+      memset(path, 0, MAXPATH);
     }
   }
 
@@ -483,21 +548,27 @@ sys_pipe(void)
   return 0;
 }
 
-// system call to test crashes
 uint64
-sys_crash(void)
+sys_symlink(void)
 {
+  char target[MAXPATH];
   char path[MAXPATH];
-  struct inode *ip;
-  int crash;
-  
-  if(argstr(0, path, MAXPATH) < 0 || argint(1, &crash) < 0)
+  uint n;
+  short major;
+  short minor;
+  struct inode* inode_link;
+
+  if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0)
     return -1;
-  ip = create(path, T_FILE, 0, 0);
-  if(ip == 0){
-    return -1;
-  }
-  iunlockput(ip);
-  crash_op(ip->dev, crash);
+  //TODO 1. target needs to be absolute path
+  //TODO 2. get right major and minor
+  n = strlen(target) + 1;
+  major = 0;
+  minor = 0;
+  begin_op(ROOTDEV);
+  inode_link = create(path, T_SYMLINK, major, minor);
+  writei(inode_link, 0, (uint64)target, 0, n);
+  iunlockput(inode_link);
+  end_op(ROOTDEV);
   return 0;
 }

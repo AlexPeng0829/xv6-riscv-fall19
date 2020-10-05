@@ -29,6 +29,7 @@ int mount(char*, char *);
 int umount(char*);
 int sigalarm(int, void*);
 int sigreturn(void);
+int symlink(char *, char *);
 
 // ulib.c
 int stat(const char*, struct stat*);
