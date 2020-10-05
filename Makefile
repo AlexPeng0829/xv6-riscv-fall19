@@ -208,8 +208,9 @@ grade:
 	@echo $(MAKE) clean
 	@$(MAKE) clean || \
 	  (echo "'make clean' failed.  HINT: Do you have another running instance of xv6?" && exit 1)
-	$(foreach EACH_LAB,$(LAB), make clean && ./grade-lab-$(EACH_LAB) $(GRADEFLAGS);\
-	echo Finish testing lab-$(EACH_LAB)'\n'=========================================================='\n';)
+	$(foreach EACH_LAB,$(LAB), make clean; ./grade-lab-$(EACH_LAB) $(GRADEFLAGS);\
+	echo Finish testing lab-$(EACH_LAB);\
+	echo "\033[41m==========================================================\033[0m";)
 
 WEBSUB := https://6828.scripts.mit.edu/2019/handin.py
 
